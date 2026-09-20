@@ -1,0 +1,327 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- lets "Add to Home Screen" run fullscreen, without the Safari chrome -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="mobile-web-app-capable" content="yes">
+<title>The Donut Robot &mdash; drag the arm, watch its map</title>
+<style>
+  :root{
+    --paper:#F5F6F2; --card:#FFFFFF; --ink:#1A2238; --ink-soft:#4A5268;
+    --cobalt:#2B4BD7; --orange:#E8641B; --red:#E23D3D; --teal:#0E8A6D;
+    --line:#D8DAD2; --maskfree:#FFFFFF; --maskred:#F0A6A6;
+    --disp:'Futura','Avenir Next','Century Gothic','Trebuchet MS',sans-serif;
+    --body:'Avenir Next','Seravek','Helvetica Neue',Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --paper:#14161B; --card:#1E212A; --ink:#EDEEF2; --ink-soft:#A7ACBD;
+           --cobalt:#7C93F0; --orange:#F0854A; --red:#F06060; --teal:#4CC2A0;
+           --line:#3A3E4C; --maskfree:#1E212A; --maskred:#743038; }
+  }
+  :root[data-theme="dark"]{ --paper:#14161B; --card:#1E212A; --ink:#EDEEF2; --ink-soft:#A7ACBD;
+           --cobalt:#7C93F0; --orange:#F0854A; --red:#F06060; --teal:#4CC2A0;
+           --line:#3A3E4C; --maskfree:#1E212A; --maskred:#743038; }
+  :root[data-theme="light"]{ --paper:#F5F6F2; --card:#FFFFFF; --ink:#1A2238; --ink-soft:#4A5268;
+           --cobalt:#2B4BD7; --orange:#E8641B; --red:#E23D3D; --teal:#0E8A6D;
+           --line:#D8DAD2; --maskfree:#FFFFFF; --maskred:#F0A6A6; }
+  body{ background:var(--paper); color:var(--ink); margin:0; padding:1.4rem 1rem 2rem; font-family:var(--body);
+        /* on a touch screen, stop long-press selecting text or raising callouts mid-drag */
+        -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+        -webkit-text-size-adjust:100%; }
+  .wrap{ max-width:1060px; margin:0 auto; }
+  .kicker{ font:600 .7rem/1 var(--disp); letter-spacing:.26em; text-transform:uppercase; color:var(--orange); margin:0 0 .4rem; }
+  h1{ font:700 1.7rem/1.1 var(--disp); text-transform:uppercase; margin:0 0 .35rem; text-wrap:balance; }
+  .lede{ color:var(--ink-soft); font-size:.95rem; line-height:1.5; margin:0 0 1.1rem; max-width:70ch; }
+  .panes{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  @media (max-width:860px){ .panes{ grid-template-columns:1fr; } }
+  .card{ background:var(--card); border:1.5px solid var(--line); border-radius:10px; padding: .9rem 1rem 1rem; min-width:0; }
+  .card h2{ font:700 .92rem/1.2 var(--disp); text-transform:uppercase; letter-spacing:.07em; margin:0; }
+  .card .sub{ font-size:.8rem; color:var(--ink-soft); margin:.2rem 0 .6rem; line-height:1.4; }
+  canvas{ width:100%; height:auto; display:block; border-radius:6px; touch-action:none; cursor:grab; }
+  canvas.crash{ outline:3px solid var(--red); outline-offset:-1px; }
+  .bar{ display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; margin-top:1rem; }
+  button{
+    font:600 .85rem/1 var(--body); color:var(--ink); background:var(--card);
+    border:1.5px solid var(--ink); border-radius:999px; padding:.55rem 1rem; cursor:pointer;
+  }
+  button:hover{ background:var(--cobalt); color:var(--card); border-color:var(--cobalt); }
+  button:focus-visible{ outline:2.5px solid var(--orange); outline-offset:2px; }
+  .read{ margin-left:auto; display:flex; gap:.9rem; align-items:center; font-variant-numeric:tabular-nums; font-size:.9rem; color:var(--ink-soft); }
+  .badge{ font:700 .75rem/1 var(--disp); letter-spacing:.08em; padding:.42rem .7rem; border-radius:999px; }
+  .badge.safe{ background:var(--teal); color:#fff; }
+  .badge.crash{ background:var(--red); color:#fff; }
+  .foot{ font-size:.78rem; color:var(--ink-soft); margin-top:1rem; line-height:1.5; max-width:78ch; }
+</style>
+
+<div class="wrap">
+  <p class="kicker">Night of Science &middot; Mathematics &times; Robotics</p>
+  <h1>Drag the robot &mdash; watch its donut map</h1>
+  <p class="lede">
+    <b>Left:</b> a two-joint arm in its room. Drag the glowing target &mdash; the arm follows. Drag the red rock to move the obstacle.
+    <b>Right:</b> the same robot's world seen as a map of its two joint angles. The red zone is every pose that hits the rock &mdash; and the map's edges wrap around: it is really the surface of a donut.
+  </p>
+
+  <div class="panes">
+    <div class="card">
+      <h2>The room</h2>
+      <p class="sub">Drag the target &#9678; or the rock. Faint arm = the other elbow solution for the same target.</p>
+      <canvas id="ws" width="520" height="520"></canvas>
+    </div>
+    <div class="card">
+      <h2>The donut map &mdash; every pose is a point</h2>
+      <p class="sub">Drag here to steer the joints directly. Cross an edge and you come back on the other side.</p>
+      <canvas id="cs" width="520" height="520"></canvas>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button id="btnElbow">Switch elbow</button>
+    <button id="btnRock">Hide rock</button>
+    <button id="btnTrail">Clear trail</button>
+    <div class="read">
+      <span id="angles">&theta;&#8321; = 0&deg; &nbsp; &theta;&#8322; = 0&deg;</span>
+      <span id="badge" class="badge safe">SAFE</span>
+    </div>
+  </div>
+
+  <p class="foot">
+    Arm lengths L&#8321;=2, L&#8322;=1; rock radius 0.4 &mdash; the same numbers as Phase&nbsp;3 of the project.
+    Things to try: park the target in one spot and press &ldquo;Switch elbow&rdquo; &mdash; two different poses reach the same point.
+    Steer the map dot straight through a red zone and watch the arm crash. Move the rock close to the shoulder and see the forbidden zone flood whole stripes of the donut.
+  </p>
+</div>
+
+<script>
+(function(){
+  const L1=2, L2=1, REACH=L1+L2, RMIN=Math.abs(L1-L2);
+  const TAU=Math.PI*2;
+  const state={ t1:0.7, t2:0.9, elbow:1, rockOn:true,
+                rock:{x:1.5, y:0.5, r:0.4}, trail:[] };
+
+  const ws=document.getElementById('ws'), cs=document.getElementById('cs');
+  const wctx=ws.getContext('2d'), cctx=cs.getContext('2d');
+  const S=ws.width, U=S/7.0, BX=S/2, BY=S/2;   // workspace scale: 7 units across
+  const CS=cs.width;
+
+  const css=(n)=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  function segDist(px,py,ax,ay,bx,by){
+    const vx=bx-ax, vy=by-ay, wx=px-ax, wy=py-ay, ll=vx*vx+vy*vy;
+    const t= ll? Math.max(0,Math.min(1,(wx*vx+wy*vy)/ll)) : 0;
+    return Math.hypot(px-(ax+t*vx), py-(ay+t*vy));
+  }
+  function fk(t1,t2){
+    const x1=L1*Math.cos(t1), y1=L1*Math.sin(t1);
+    return {x1,y1, x:x1+L2*Math.cos(t1+t2), y:y1+L2*Math.sin(t1+t2)};
+  }
+  function collides(t1,t2){
+    if(!state.rockOn) return false;
+    const p=fk(t1,t2), o=state.rock;
+    return segDist(o.x,o.y,0,0,p.x1,p.y1)<o.r || segDist(o.x,o.y,p.x1,p.y1,p.x,p.y)<o.r;
+  }
+  function ik(x,y,elbow){
+    let d=Math.hypot(x,y);
+    const dc=Math.max(RMIN+0.02, Math.min(REACH-0.02, d));
+    if(d===0){ x=dc; y=0; } else { x*=dc/d; y*=dc/d; }
+    d=dc;
+    const c2=(d*d-L1*L1-L2*L2)/(2*L1*L2);
+    const t2=elbow*Math.acos(Math.max(-1,Math.min(1,c2)));
+    const beta=Math.acos(Math.max(-1,Math.min(1,(L1*L1+d*d-L2*L2)/(2*L1*d))));
+    const t1=Math.atan2(y,x)-elbow*beta;
+    return { t1:(t1%TAU+TAU)%TAU, t2:(t2%TAU+TAU)%TAU };
+  }
+
+  // ------- C-obstacle mask (offscreen) -------
+  const MG=96, mask=document.createElement('canvas'); mask.width=MG; mask.height=MG;
+  const mctx=mask.getContext('2d');
+  function rebuildMask(){
+    const img=mctx.createImageData(MG,MG);
+    const red=hexRGB(css('--maskred')), free=hexRGB(css('--maskfree'));
+    for(let j=0;j<MG;j++) for(let i=0;i<MG;i++){
+      const t1=(i+.5)*TAU/MG, t2=(j+.5)*TAU/MG;
+      const bad=collides(t1,t2);
+      const k=((MG-1-j)*MG+i)*4, c=bad?red:free;
+      img.data[k]=c[0]; img.data[k+1]=c[1]; img.data[k+2]=c[2]; img.data[k+3]=255;
+    }
+    mctx.putImageData(img,0,0);
+  }
+  function hexRGB(h){
+    h=h.replace('#','');
+    if(h.length===3) h=h.split('').map(c=>c+c).join('');
+    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+  }
+
+  // ------- drawing -------
+  const wx=(x)=>BX+x*U, wy=(y)=>BY-y*U;
+  function drawRoom(){
+    const ink=css('--ink'), soft=css('--ink-soft'), cob=css('--cobalt'),
+          org=css('--orange'), red=css('--red'), card=css('--card'), line=css('--line');
+    wctx.clearRect(0,0,S,S);
+    // reach ring
+    wctx.beginPath(); wctx.arc(BX,BY,REACH*U,0,TAU);
+    wctx.fillStyle=cob+'14'; wctx.fill();
+    wctx.strokeStyle=cob; wctx.lineWidth=1.5; wctx.stroke();
+    wctx.beginPath(); wctx.arc(BX,BY,RMIN*U,0,TAU);
+    wctx.fillStyle=card; wctx.fill();
+    wctx.setLineDash([6,5]); wctx.stroke(); wctx.setLineDash([]);
+    // rock
+    if(state.rockOn){
+      wctx.beginPath(); wctx.arc(wx(state.rock.x),wy(state.rock.y),state.rock.r*U,0,TAU);
+      wctx.fillStyle=red; wctx.fill();
+    }
+    const p=fk(state.t1,state.t2);
+    // ghost: other elbow for same target
+    const alt=ik(p.x,p.y,-state.elbow), pa=fk(alt.t1,alt.t2);
+    wctx.lineCap='round'; wctx.globalAlpha=.3;
+    wctx.strokeStyle=cob; wctx.lineWidth=9;
+    wctx.beginPath(); wctx.moveTo(BX,BY); wctx.lineTo(wx(pa.x1),wy(pa.y1)); wctx.stroke();
+    wctx.strokeStyle=org;
+    wctx.beginPath(); wctx.moveTo(wx(pa.x1),wy(pa.y1)); wctx.lineTo(wx(pa.x),wy(pa.y)); wctx.stroke();
+    wctx.globalAlpha=1;
+    // arm
+    wctx.strokeStyle=cob; wctx.lineWidth=11;
+    wctx.beginPath(); wctx.moveTo(BX,BY); wctx.lineTo(wx(p.x1),wy(p.y1)); wctx.stroke();
+    wctx.strokeStyle=org;
+    wctx.beginPath(); wctx.moveTo(wx(p.x1),wy(p.y1)); wctx.lineTo(wx(p.x),wy(p.y)); wctx.stroke();
+    // joints
+    wctx.fillStyle=ink;
+    wctx.beginPath(); wctx.arc(BX,BY,7,0,TAU); wctx.fill();
+    wctx.beginPath(); wctx.arc(wx(p.x1),wy(p.y1),5.5,0,TAU); wctx.fill();
+    // target marker
+    wctx.strokeStyle=ink; wctx.lineWidth=2.5;
+    wctx.beginPath(); wctx.arc(wx(p.x),wy(p.y),11,0,TAU); wctx.stroke();
+    wctx.beginPath(); wctx.arc(wx(p.x),wy(p.y),3.5,0,TAU); wctx.fillStyle=ink; wctx.fill();
+    // labels
+    wctx.fillStyle=soft; wctx.font='600 13px Avenir Next, Arial';
+    wctx.fillText('shoulder', BX-64, BY+22);
+    if(state.rockOn) wctx.fillText('rock', wx(state.rock.x)-14, wy(state.rock.y)-state.rock.r*U-8);
+  }
+
+  const cxp=(t)=>((t%TAU+TAU)%TAU)/TAU*CS, cyp=(t)=>CS-((t%TAU+TAU)%TAU)/TAU*CS;
+  function drawMap(){
+    const ink=css('--ink'), soft=css('--ink-soft'), cob=css('--cobalt'),
+          org=css('--orange'), teal=css('--teal'), line=css('--line');
+    cctx.clearRect(0,0,CS,CS);
+    cctx.imageSmoothingEnabled=false;
+    cctx.drawImage(mask,0,0,CS,CS);
+    cctx.imageSmoothingEnabled=true;
+    // grid
+    cctx.strokeStyle=line; cctx.lineWidth=1;
+    for(let k=1;k<4;k++){
+      cctx.beginPath(); cctx.moveTo(CS*k/4,0); cctx.lineTo(CS*k/4,CS); cctx.stroke();
+      cctx.beginPath(); cctx.moveTo(0,CS*k/4); cctx.lineTo(CS,CS*k/4); cctx.stroke();
+    }
+    // seam markers
+    cctx.fillStyle=cob;
+    tri(cctx, 8,CS/2, 0, cob); tri(cctx, CS-8,CS/2, 0, cob);
+    tri(cctx, CS/2,8, 1, org); tri(cctx, CS/2,CS-8, 1, org);
+    // frame
+    cctx.strokeStyle=ink; cctx.lineWidth=2.5; cctx.strokeRect(1,1,CS-2,CS-2);
+    // trail (wrap-aware)
+    cctx.strokeStyle=teal; cctx.lineWidth=2.5; cctx.lineCap='round';
+    const tr=state.trail;
+    for(let k=1;k<tr.length;k++){
+      let d1=tr[k][0]-tr[k-1][0], d2=tr[k][1]-tr[k-1][1];
+      if(d1>Math.PI) d1-=TAU; if(d1<-Math.PI) d1+=TAU;
+      if(d2>Math.PI) d2-=TAU; if(d2<-Math.PI) d2+=TAU;
+      const x1=cxp(tr[k-1][0]), y1=cyp(tr[k-1][1]);
+      const x2=cxp(tr[k][0]),   y2=cyp(tr[k][1]);
+      cctx.globalAlpha=.25+.75*(k/tr.length);
+      // draw from p1 toward p1+delta, and into p2 from p2-delta (handles seam crossings)
+      cctx.beginPath(); cctx.moveTo(x1,y1); cctx.lineTo(x1+d1/TAU*CS, y1-d2/TAU*CS); cctx.stroke();
+      cctx.beginPath(); cctx.moveTo(x2-d1/TAU*CS, y2+d2/TAU*CS); cctx.lineTo(x2,y2); cctx.stroke();
+    }
+    cctx.globalAlpha=1;
+    // other-elbow dot
+    const p=fk(state.t1,state.t2), alt=ik(p.x,p.y,-state.elbow);
+    cctx.strokeStyle=soft; cctx.lineWidth=2;
+    cctx.beginPath(); cctx.arc(cxp(alt.t1),cyp(alt.t2),7,0,TAU); cctx.stroke();
+    // current config dot
+    cctx.beginPath(); cctx.arc(cxp(state.t1),cyp(state.t2),9,0,TAU);
+    cctx.fillStyle=ink; cctx.fill();
+    cctx.strokeStyle=css('--card'); cctx.lineWidth=2.5; cctx.stroke();
+    // labels
+    cctx.fillStyle=soft; cctx.font='600 13px Avenir Next, Arial';
+    cctx.fillText('shoulder θ₁ →', 10, CS-10);
+    cctx.save(); cctx.translate(16,110); cctx.rotate(-Math.PI/2);
+    cctx.fillText('elbow θ₂ →', 0, 0); cctx.restore();
+  }
+  function tri(ctx,x,y,horiz,color){
+    ctx.save(); ctx.translate(x,y); if(horiz) ctx.rotate(Math.PI/2);
+    ctx.beginPath(); ctx.moveTo(0,-6); ctx.lineTo(4.5,4); ctx.lineTo(-4.5,4); ctx.closePath();
+    ctx.fillStyle=color; ctx.fill(); ctx.restore();
+  }
+
+  function refresh(pushTrail){
+    if(pushTrail){
+      state.trail.push([state.t1,state.t2]);
+      if(state.trail.length>350) state.trail.shift();
+    }
+    const bad=collides(state.t1,state.t2);
+    ws.classList.toggle('crash',bad); cs.classList.toggle('crash',bad);
+    const b=document.getElementById('badge');
+    b.className='badge '+(bad?'crash':'safe'); b.textContent=bad?'CRASH':'SAFE';
+    const deg=(t)=>Math.round(((t%TAU+TAU)%TAU)*180/Math.PI);
+    document.getElementById('angles').innerHTML='θ₁ = '+deg(state.t1)+'° &nbsp; θ₂ = '+deg(state.t2)+'°';
+    drawRoom(); drawMap();
+  }
+
+  // ------- interaction -------
+  function evPos(cv,e){
+    const r=cv.getBoundingClientRect();
+    return { x:(e.clientX-r.left)*cv.width/r.width, y:(e.clientY-r.top)*cv.height/r.height };
+  }
+  let wsMode=null;
+  ws.addEventListener('pointerdown',(e)=>{
+    ws.setPointerCapture(e.pointerId);
+    const p=evPos(ws,e), mx=(p.x-BX)/U, my=(BY-p.y)/U;
+    wsMode = (state.rockOn && Math.hypot(mx-state.rock.x,my-state.rock.y) < state.rock.r+0.18) ? 'rock' : 'target';
+    wsDrag(e);
+  });
+  ws.addEventListener('pointermove',(e)=>{ if(wsMode) wsDrag(e); });
+  ws.addEventListener('pointerup',()=>{ wsMode=null; });
+  function wsDrag(e){
+    const p=evPos(ws,e), mx=(p.x-BX)/U, my=(BY-p.y)/U;
+    if(wsMode==='rock'){
+      const d=Math.hypot(mx,my), cap=REACH+0.4;
+      const f=d>cap?cap/d:1;
+      state.rock.x=mx*f; state.rock.y=my*f;
+      rebuildMask(); refresh(false);
+    } else {
+      const sol=ik(mx,my,state.elbow);
+      state.t1=sol.t1; state.t2=sol.t2;
+      refresh(true);
+    }
+  }
+  let csDown=false;
+  cs.addEventListener('pointerdown',(e)=>{ cs.setPointerCapture(e.pointerId); csDown=true; csDrag(e); });
+  cs.addEventListener('pointermove',(e)=>{ if(csDown) csDrag(e); });
+  cs.addEventListener('pointerup',()=>{ csDown=false; });
+  function csDrag(e){
+    const p=evPos(cs,e);
+    state.t1=Math.max(0,Math.min(.9999,p.x/CS))*TAU;
+    state.t2=Math.max(0,Math.min(.9999,(CS-p.y)/CS))*TAU;
+    refresh(true);
+  }
+
+  document.getElementById('btnElbow').addEventListener('click',()=>{
+    const p=fk(state.t1,state.t2), sol=ik(p.x,p.y,-state.elbow);
+    state.elbow=-state.elbow; state.t1=sol.t1; state.t2=sol.t2; refresh(true);
+  });
+  document.getElementById('btnRock').addEventListener('click',(e)=>{
+    state.rockOn=!state.rockOn;
+    e.target.textContent=state.rockOn?'Hide rock':'Show rock';
+    rebuildMask(); refresh(false);
+  });
+  document.getElementById('btnTrail').addEventListener('click',()=>{ state.trail=[]; refresh(false); });
+
+  // theme changes re-render
+  try{
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{ rebuildMask(); refresh(false); });
+    new MutationObserver(()=>{ rebuildMask(); refresh(false); })
+      .observe(document.documentElement,{attributes:true, attributeFilter:['data-theme']});
+  }catch(err){}
+
+  rebuildMask(); refresh(true);
+})();
+</script>
