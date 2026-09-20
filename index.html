@@ -306,7 +306,9 @@
   }
   let wsMode=null;
   ws.addEventListener('pointerdown',(e)=>{
-    ws.setPointerCapture(e.pointerId);
+    // capture keeps the drag alive if the finger slides off the canvas, but it
+    // throws if the pointer id is not active -- never let that kill the drag
+    try{ ws.setPointerCapture(e.pointerId); }catch(err){}
     const p=evPos(ws,e), mx=(p.x-BX)/U, my=(BY-p.y)/U;
     wsMode = (state.rockOn && Math.hypot(mx-state.rock.x,my-state.rock.y) < state.rock.r+0.18) ? 'rock' : 'target';
     wsDrag(e);
@@ -327,7 +329,9 @@
     }
   }
   let csDown=false;
-  cs.addEventListener('pointerdown',(e)=>{ cs.setPointerCapture(e.pointerId); csDown=true; csDrag(e); });
+  cs.addEventListener('pointerdown',(e)=>{
+    try{ cs.setPointerCapture(e.pointerId); }catch(err){}
+    csDown=true; csDrag(e); });
   cs.addEventListener('pointermove',(e)=>{ if(csDown) csDrag(e); });
   cs.addEventListener('pointerup',()=>{ csDown=false; });
   function csDrag(e){
