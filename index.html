@@ -38,6 +38,14 @@
   .card h2{ font:700 .92rem/1.2 var(--disp); text-transform:uppercase; letter-spacing:.07em; margin:0; }
   .card .sub{ font-size:.8rem; color:var(--ink-soft); margin:.2rem 0 .6rem; line-height:1.4; }
   canvas{ width:100%; height:auto; display:block; border-radius:6px; touch-action:none; cursor:grab; }
+  /* legend for the two dots on the map */
+  .key{ display:flex; flex-wrap:wrap; gap:.15rem .9rem; margin:.45rem 0 0;
+        font-size:.76rem; color:var(--ink-soft); }
+  .key .k{ display:inline-flex; align-items:center; gap:.3rem; white-space:nowrap; }
+  .dot{ width:.62rem; height:.62rem; border-radius:50%; display:inline-block; flex:none; }
+  .dot.solid{ background:var(--ink); }
+  .dot.hollow{ background:transparent; border:2px solid var(--ink-soft); }
+  .dot.trail{ background:var(--teal); border-radius:1px; height:.2rem; width:.9rem; }
   canvas.crash{ outline:3px solid var(--red); outline-offset:-1px; }
   .bar{ display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; margin-top:1rem; }
   button{
@@ -51,6 +59,26 @@
   .badge.safe{ background:var(--teal); color:#fff; }
   .badge.crash{ background:var(--red); color:#fff; }
   .foot{ font-size:.78rem; color:var(--ink-soft); margin-top:1rem; line-height:1.5; max-width:78ch; }
+
+  /* ---- kiosk mode: a wide but short screen, e.g. a tablet held landscape.
+     Trim the prose and size the canvases by the space actually left, so the
+     two panels fill the display instead of being pushed off the bottom. ---- */
+  @media (orientation:landscape) and (max-height:900px){
+    body{ padding:.55rem .8rem .7rem; }
+    .kicker, .lede, .foot{ display:none; }
+    h1{ font:700 1.15rem/1.15 var(--disp); margin:0 0 .45rem; }
+    .panes{ gap:.75rem; }
+    .card{ padding:.5rem .6rem .6rem; border-radius:8px; }
+    .card h2{ font-size:.8rem; }
+    .card .sub{ font-size:.72rem; margin:.15rem 0 .4rem; }
+    .key{ font-size:.68rem; margin-top:.35rem; gap:.1rem .7rem; }
+    /* width:auto + both maxima keeps the canvas square while it shrinks */
+    canvas{ width:auto; height:auto; max-width:100%;
+            max-height:calc(100vh - 200px); margin:0 auto; }
+    .bar{ margin-top:.55rem; gap:.45rem; }
+    button{ padding:.45rem .8rem; font-size:.8rem; }
+    .read{ font-size:.82rem; }
+  }
 </style>
 
 <div class="wrap">
@@ -71,6 +99,11 @@
       <h2>The donut map &mdash; every pose is a point</h2>
       <p class="sub">Drag here to steer the joints directly. Cross an edge and you come back on the other side.</p>
       <canvas id="cs" width="520" height="520"></canvas>
+      <p class="key">
+        <span class="k"><span class="dot solid"></span>the pose right now</span>
+        <span class="k"><span class="dot hollow"></span>the other elbow &mdash; same hand position</span>
+        <span class="k"><span class="dot trail"></span>where you have been</span>
+      </p>
     </div>
   </div>
 
